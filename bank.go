@@ -27,6 +27,10 @@ type User struct {
 	Key   string `json:"key"`
 }
 
+type Response struct {
+	Message string `json:"message"`
+}
+
 var allUser AllUser
 
 func (users *AllUser) addUser(u User) {
@@ -46,20 +50,20 @@ func (users *AllUser) removeUser(name string) bool {
 	return true
 }
 
-func updateUser(name string, money int) error {
+func updateUser(name string, money int) (int, error) {
 	user, find := allUser.findUser(name)
 
 	if !find {
-		return errors.New("user not found")
+		return http.StatusNotFound, errors.New("user not found")
 	}
 
 	if user.Money+money < 0 {
-		return errors.New("not enough money")
+		return http.StatusOK, errors.New("not enough money")
 	}
 
 	user.Money += money
 
-	return nil
+	return http.StatusOK, nil
 }
 
 func (users *AllUser) findUser(name string) (*User, bool) {
@@ -118,7 +122,7 @@ func getAccessToken(c echo.Context) error {
 	user, find := allUser.findUser(name)
 
 	if find == false {
-		return c.String(http.StatusOK, "User not found.")
+		return c.JSON(http.StatusOK, Response{Message: "User not found"})
 	}
 
 	// Create token
@@ -146,15 +150,15 @@ func deposit(c echo.Context) error {
 	deposit, _ := strconv.Atoi(c.FormValue("money"))
 
 	if verified := verifydUser(c, name); !verified {
-		return c.String(http.StatusOK, "token not allowed.")
+		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
-	err := updateUser(name, deposit)
+	statusCode, err := updateUser(name, deposit)
 
 	if err != nil {
-		return c.String(http.StatusOK, err.Error())
+		return c.JSON(statusCode, Response{Message: err.Error()})
 	}
-	return c.String(http.StatusOK, "save success")
+	return c.JSON(http.StatusOK, Response{Message: "save success"})
 
 }
 
@@ -163,7 +167,7 @@ func checkBalance(c echo.Context) error {
 	name := c.QueryParam("name")
 
 	if verified := verifydUser(c, name); !verified {
-		return c.String(http.StatusOK, "token not allowed.")
+		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
 	user, find := allUser.findUser(name)
@@ -182,15 +186,15 @@ func withdraw(c echo.Context) error {
 	withdraw *= -1
 
 	if verified := verifydUser(c, name); !verified {
-		return c.String(http.StatusOK, "token not allowed.")
+		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
-	err := updateUser(name, withdraw)
+	statusCode, err := updateUser(name, withdraw)
 
 	if err != nil {
-		return c.String(http.StatusOK, err.Error())
+		return c.JSON(statusCode, Response{Message: err.Error()})
 	}
-	return c.String(http.StatusOK, "withdraw success")
+	return c.JSON(http.StatusOK, Response{Message: "withdraw success"})
 
 }
 
@@ -199,13 +203,13 @@ func deleteUser(c echo.Context) error {
 	name := c.QueryParam("name")
 
 	if verified := verifydUser(c, name); !verified {
-		return c.String(http.StatusOK, "token not allowed.")
+		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
 	if allUser.removeUser(name) {
-		return c.String(http.StatusOK, "remove success")
+		return c.JSON(http.StatusOK, Response{Message: "remove success"})
 	}
-	return c.String(http.StatusOK, "user not found")
+	return c.JSON(http.StatusNotFound, Response{Message: "user not found"})
 
 }
 
