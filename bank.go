@@ -7,8 +7,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 )
 
 // AllUser ...
@@ -22,11 +25,6 @@ type User struct {
 	Name  string `json:"name"`
 	Money int    `json:"money"`
 	Key   string `json:"key"`
-}
-
-// SimpleResponse ...
-type SimpleResponse struct {
-	Key string `json:"key"`
 }
 
 var allUser AllUser
@@ -122,8 +120,23 @@ func getAccessToken(c echo.Context) error {
 	if find == false {
 		return c.String(http.StatusOK, "User not found.")
 	}
-	response := &SimpleResponse{Key: user.Key}
-	return c.JSON(http.StatusOK, response)
+
+	// Create token
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	// Set claims
+	claims := token.Claims.(jwt.MapClaims)
+	claims["name"] = user.Name
+	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
+
+	// Generate encoded token and send it as response.
+	t, err := token.SignedString([]byte("secret"))
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]string{
+		"token": t,
+	})
 
 }
 
@@ -131,6 +144,10 @@ func getAccessToken(c echo.Context) error {
 func deposit(c echo.Context) error {
 	name := c.QueryParam("name")
 	deposit, _ := strconv.Atoi(c.FormValue("money"))
+
+	if verified := verifydUser(c, name); !verified {
+		return c.String(http.StatusOK, "token not allowed.")
+	}
 
 	err := updateUser(name, deposit)
 
@@ -144,6 +161,11 @@ func deposit(c echo.Context) error {
 //GET /api/check?name="yourname"
 func checkBalance(c echo.Context) error {
 	name := c.QueryParam("name")
+
+	if verified := verifydUser(c, name); !verified {
+		return c.String(http.StatusOK, "token not allowed.")
+	}
+
 	user, find := allUser.findUser(name)
 
 	if find == false {
@@ -159,6 +181,10 @@ func withdraw(c echo.Context) error {
 	withdraw, _ := strconv.Atoi(c.FormValue("money"))
 	withdraw *= -1
 
+	if verified := verifydUser(c, name); !verified {
+		return c.String(http.StatusOK, "token not allowed.")
+	}
+
 	err := updateUser(name, withdraw)
 
 	if err != nil {
@@ -171,11 +197,28 @@ func withdraw(c echo.Context) error {
 // DELETE /api/user?name="yourname"
 func deleteUser(c echo.Context) error {
 	name := c.QueryParam("name")
+
+	if verified := verifydUser(c, name); !verified {
+		return c.String(http.StatusOK, "token not allowed.")
+	}
+
 	if allUser.removeUser(name) {
 		return c.String(http.StatusOK, "remove success")
 	}
 	return c.String(http.StatusOK, "user not found")
 
+}
+
+func verifydUser(c echo.Context, name string) bool {
+	user := c.Get("user").(*jwt.Token)
+	claims := user.Claims.(jwt.MapClaims)
+	tokenName := claims["name"].(string)
+
+	if tokenName != name {
+		return false
+	}
+
+	return true
 }
 
 func main() {
@@ -184,10 +227,13 @@ func main() {
 	readAllUserData()
 
 	e.POST("/api/user", getAccessToken)
-	e.POST("/api/deposit", deposit)
-	e.POST("/api/withdraw", withdraw)
-	e.GET("/api/check", checkBalance)
-	e.DELETE("/api/user", deleteUser)
+
+	tokenCheck := middleware.JWT([]byte("secret"))
+
+	e.POST("/api/deposit", deposit, tokenCheck)
+	e.POST("/api/withdraw", withdraw, tokenCheck)
+	e.GET("/api/check", checkBalance, tokenCheck)
+	e.DELETE("/api/user", deleteUser, tokenCheck)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }
