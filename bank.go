@@ -31,6 +31,10 @@ type Response struct {
 	Message string `json:"message"`
 }
 
+type ResponseMoney struct {
+	Money string `json:"money"`
+}
+
 var allUser AllUser
 
 func (users *AllUser) addUser(u User) {
@@ -116,13 +120,22 @@ func readAllUserData() {
 
 }
 
+func formattedMoney(moneyStr string) (int, error) {
+	money, err := strconv.Atoi(moneyStr)
+
+	if err != nil || money < 0 {
+		return 0, errors.New("invalid syntax of money")
+	}
+	return money, nil
+}
+
 //POST /api/user
 func getAccessToken(c echo.Context) error {
 	name := c.FormValue("name")
 	user, find := allUser.findUser(name)
 
 	if find == false {
-		return c.JSON(http.StatusOK, Response{Message: "User not found"})
+		return c.JSON(http.StatusNotFound, Response{Message: "user not found"})
 	}
 
 	// Create token
@@ -147,9 +160,13 @@ func getAccessToken(c echo.Context) error {
 //POST /api/deposit?name="yourname"
 func deposit(c echo.Context) error {
 	name := c.QueryParam("name")
-	deposit, _ := strconv.Atoi(c.FormValue("money"))
+	deposit, err := formattedMoney(c.FormValue("money"))
 
-	if verified := verifydUser(c, name); !verified {
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, Response{Message: err.Error()})
+	}
+
+	if verified := verifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -166,26 +183,31 @@ func deposit(c echo.Context) error {
 func checkBalance(c echo.Context) error {
 	name := c.QueryParam("name")
 
-	if verified := verifydUser(c, name); !verified {
+	if verified := verifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
 	user, find := allUser.findUser(name)
 
 	if find == false {
-		return c.String(http.StatusOK, "User not found.")
+		return c.JSON(http.StatusNotFound, Response{Message: "user not found"})
 	}
 
-	return c.String(http.StatusOK, fmt.Sprint(user.Money))
+	return c.JSON(http.StatusOK, ResponseMoney{Money: fmt.Sprint(user.Money)})
 }
 
 // POST/api/withdraw?name="yourname"
 func withdraw(c echo.Context) error {
 	name := c.QueryParam("name")
-	withdraw, _ := strconv.Atoi(c.FormValue("money"))
+
+	withdraw, err := formattedMoney(c.FormValue("money"))
 	withdraw *= -1
 
-	if verified := verifydUser(c, name); !verified {
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, Response{Message: err.Error()})
+	}
+
+	if verified := verifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -202,7 +224,7 @@ func withdraw(c echo.Context) error {
 func deleteUser(c echo.Context) error {
 	name := c.QueryParam("name")
 
-	if verified := verifydUser(c, name); !verified {
+	if verified := verifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -213,7 +235,7 @@ func deleteUser(c echo.Context) error {
 
 }
 
-func verifydUser(c echo.Context, name string) bool {
+func verifyUser(c echo.Context, name string) bool {
 	user := c.Get("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	tokenName := claims["name"].(string)
