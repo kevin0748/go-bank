@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -10,15 +11,22 @@ import (
 	"github.com/labstack/echo"
 )
 
+// AllUser ...
 type AllUser struct {
 	Users        []User `json:"users"`
 	userNameList []interface{}
 }
 
+// User ...
 type User struct {
 	Name  string `json:"name"`
 	Money int    `json:"money"`
 	Key   string `json:"key"`
+}
+
+// SimpleResponse ...
+type SimpleResponse struct {
+	Key string `json:"key"`
 }
 
 var allUser AllUser
@@ -40,16 +48,20 @@ func (users *AllUser) removeUser(name string) bool {
 	return true
 }
 
-func updateUser(name string, money int) bool {
+func updateUser(name string, money int) error {
 	user, find := allUser.findUser(name)
 
 	if !find {
-		return false
+		return errors.New("user not found")
+	}
+
+	if user.Money+money < 0 {
+		return errors.New("not enough money")
 	}
 
 	user.Money += money
 
-	return true
+	return nil
 }
 
 func (users *AllUser) findUser(name string) (*User, bool) {
@@ -84,6 +96,8 @@ func (users *AllUser) findUserIdx(name string) (int, bool) {
 
 func readAllUserData() {
 
+	allUser = AllUser{}
+
 	byteValue, _ := ioutil.ReadFile("user/users.json")
 
 	json.Unmarshal(byteValue, &(allUser.userNameList))
@@ -108,8 +122,8 @@ func getAccessToken(c echo.Context) error {
 	if find == false {
 		return c.String(http.StatusOK, "User not found.")
 	}
-
-	return c.String(http.StatusOK, user.Key)
+	response := &SimpleResponse{Key: user.Key}
+	return c.JSON(http.StatusOK, response)
 
 }
 
@@ -118,9 +132,13 @@ func deposit(c echo.Context) error {
 	name := c.QueryParam("name")
 	deposit, _ := strconv.Atoi(c.FormValue("money"))
 
-	updateUser(name, deposit)
+	err := updateUser(name, deposit)
 
-	return c.String(http.StatusOK, "ok")
+	if err != nil {
+		return c.String(http.StatusOK, err.Error())
+	}
+	return c.String(http.StatusOK, "save success")
+
 }
 
 //GET /api/check?name="yourname"
@@ -141,16 +159,23 @@ func withdraw(c echo.Context) error {
 	withdraw, _ := strconv.Atoi(c.FormValue("money"))
 	withdraw *= -1
 
-	updateUser(name, withdraw)
+	err := updateUser(name, withdraw)
 
-	return c.String(http.StatusOK, "ok")
+	if err != nil {
+		return c.String(http.StatusOK, err.Error())
+	}
+	return c.String(http.StatusOK, "withdraw success")
+
 }
 
 // DELETE /api/user?name="yourname"
 func deleteUser(c echo.Context) error {
 	name := c.QueryParam("name")
-	allUser.removeUser(name)
-	return c.String(http.StatusOK, "ok")
+	if allUser.removeUser(name) {
+		return c.String(http.StatusOK, "remove success")
+	}
+	return c.String(http.StatusOK, "user not found")
+
 }
 
 func main() {
