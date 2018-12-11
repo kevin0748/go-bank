@@ -24,7 +24,6 @@ type AllUser struct {
 type User struct {
 	Name  string `json:"name"`
 	Money int    `json:"money"`
-	Key   string `json:"key"`
 }
 
 type Response struct {
@@ -33,6 +32,16 @@ type Response struct {
 
 type ResponseMoney struct {
 	Money string `json:"money"`
+}
+
+type Router interface {
+	deposit(echo.Context) error
+	withdraw(echo.Context) error
+	checkBalance(echo.Context) error
+	deleteUser(echo.Context) error
+}
+
+type RouterImpl struct {
 }
 
 var allUser AllUser
@@ -158,7 +167,7 @@ func getAccessToken(c echo.Context) error {
 }
 
 //POST /api/deposit?name="yourname"
-func deposit(c echo.Context) error {
+func (router *RouterImpl) deposit(c echo.Context) error {
 	name := c.QueryParam("name")
 	deposit, err := formattedMoney(c.FormValue("money"))
 
@@ -180,7 +189,7 @@ func deposit(c echo.Context) error {
 }
 
 //GET /api/check?name="yourname"
-func checkBalance(c echo.Context) error {
+func (router *RouterImpl) checkBalance(c echo.Context) error {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
@@ -197,7 +206,7 @@ func checkBalance(c echo.Context) error {
 }
 
 // POST/api/withdraw?name="yourname"
-func withdraw(c echo.Context) error {
+func (router *RouterImpl) withdraw(c echo.Context) error {
 	name := c.QueryParam("name")
 
 	withdraw, err := formattedMoney(c.FormValue("money"))
@@ -221,7 +230,7 @@ func withdraw(c echo.Context) error {
 }
 
 // DELETE /api/user?name="yourname"
-func deleteUser(c echo.Context) error {
+func (router *RouterImpl) deleteUser(c echo.Context) error {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
@@ -255,11 +264,13 @@ func main() {
 	e.POST("/api/user", getAccessToken)
 
 	tokenCheck := middleware.JWT([]byte("secret"))
+	var router Router
+	router = &RouterImpl{}
 
-	e.POST("/api/deposit", deposit, tokenCheck)
-	e.POST("/api/withdraw", withdraw, tokenCheck)
-	e.GET("/api/check", checkBalance, tokenCheck)
-	e.DELETE("/api/user", deleteUser, tokenCheck)
+	e.POST("/api/deposit", router.deposit, tokenCheck)
+	e.POST("/api/withdraw", router.withdraw, tokenCheck)
+	e.GET("/api/check", router.checkBalance, tokenCheck)
+	e.DELETE("/api/user", router.deleteUser, tokenCheck)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }
