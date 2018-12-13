@@ -1,4 +1,4 @@
-package main
+package bank
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
 )
 
 // AllUser ...
@@ -34,10 +33,10 @@ type PayloadMoney struct {
 }
 
 type Router interface {
-	deposit(echo.Context) error
-	withdraw(echo.Context) error
-	checkBalance(echo.Context) error
-	deleteUser(echo.Context) error
+	Deposit(echo.Context) error
+	Withdraw(echo.Context) error
+	CheckBalance(echo.Context) error
+	DeleteUser(echo.Context) error
 }
 
 type RouterImpl struct {
@@ -103,7 +102,7 @@ func writeUserData(user *User) {
 
 }
 
-func readAllUserData() {
+func ReadAllUserData() {
 
 	allUser = AllUser{Users: make(map[string]*User)}
 
@@ -133,7 +132,7 @@ func formattedMoney(money int) (int, error) {
 }
 
 //POST /api/user
-func getAccessToken(c echo.Context) error {
+func GetAccessToken(c echo.Context) error {
 	name := c.FormValue("name")
 	user, find := allUser.findUser(name)
 
@@ -161,7 +160,7 @@ func getAccessToken(c echo.Context) error {
 }
 
 //POST /api/deposit?name="yourname"
-func (router *RouterImpl) deposit(c echo.Context) (err error) {
+func (router *RouterImpl) Deposit(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 	payload := new(PayloadMoney)
 	if err = c.Bind(payload); err != nil {
@@ -187,7 +186,7 @@ func (router *RouterImpl) deposit(c echo.Context) (err error) {
 }
 
 //GET /api/check?name="yourname"
-func (router *RouterImpl) checkBalance(c echo.Context) (err error) {
+func (router *RouterImpl) CheckBalance(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
@@ -204,7 +203,7 @@ func (router *RouterImpl) checkBalance(c echo.Context) (err error) {
 }
 
 // POST/api/withdraw?name="yourname"
-func (router *RouterImpl) withdraw(c echo.Context) (err error) {
+func (router *RouterImpl) Withdraw(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 	payload := new(PayloadMoney)
 	if err = c.Bind(payload); err != nil {
@@ -232,7 +231,7 @@ func (router *RouterImpl) withdraw(c echo.Context) (err error) {
 }
 
 // DELETE /api/user?name="yourname"
-func (router *RouterImpl) deleteUser(c echo.Context) (err error) {
+func (router *RouterImpl) DeleteUser(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
@@ -256,23 +255,4 @@ func verifyUser(c echo.Context, name string) bool {
 	}
 
 	return true
-}
-
-func main() {
-	e := echo.New()
-
-	readAllUserData()
-
-	e.POST("/api/user", getAccessToken)
-
-	tokenCheck := middleware.JWT([]byte("secret"))
-	var router Router
-	router = &RouterImpl{}
-
-	e.POST("/api/deposit", router.deposit, tokenCheck)
-	e.POST("/api/withdraw", router.withdraw, tokenCheck)
-	e.GET("/api/check", router.checkBalance, tokenCheck)
-	e.DELETE("/api/user", router.deleteUser, tokenCheck)
-
-	e.Logger.Fatal(e.Start(":1323"))
 }
