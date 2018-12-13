@@ -71,6 +71,7 @@ func updateUser(name string, money int) (int, error) {
 	}
 
 	user.Money += money
+	writeUserData(user)
 
 	return http.StatusOK, nil
 }
@@ -82,6 +83,24 @@ func (users *AllUser) findUser(name string) (*User, bool) {
 	}
 
 	return &User{}, false
+
+}
+
+func writeUserData(user *User) {
+
+	fileName := "user/" + user.Name + ".json"
+
+	byteValue, _ := ioutil.ReadFile(fileName)
+
+	temp := User{}
+
+	json.Unmarshal(byteValue, &temp)
+
+	temp.Money = user.Money
+
+	byteWrite, _ := json.Marshal(&temp)
+
+	ioutil.WriteFile(fileName, byteWrite, 0644)
 
 }
 
