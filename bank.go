@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
@@ -30,8 +29,8 @@ type Response struct {
 	Message string `json:"message"`
 }
 
-type ResponseMoney struct {
-	Money string `json:"money"`
+type PayloadMoney struct {
+	Money int `json:"money"`
 }
 
 type Router interface {
@@ -124,10 +123,10 @@ func readAllUserData() {
 
 }
 
-func formattedMoney(moneyStr string) (int, error) {
-	money, err := strconv.Atoi(moneyStr)
+func formattedMoney(money int) (int, error) {
+	// money, err := strconv.Atoi(moneyStr)
 
-	if err != nil || money < 0 {
+	if money < 0 {
 		return 0, errors.New("invalid syntax of money")
 	}
 	return money, nil
@@ -162,9 +161,13 @@ func getAccessToken(c echo.Context) error {
 }
 
 //POST /api/deposit?name="yourname"
-func (router *RouterImpl) deposit(c echo.Context) error {
+func (router *RouterImpl) deposit(c echo.Context) (err error) {
 	name := c.QueryParam("name")
-	deposit, err := formattedMoney(c.FormValue("money"))
+	payload := new(PayloadMoney)
+	if err = c.Bind(payload); err != nil {
+		return
+	}
+	deposit, err := formattedMoney(payload.Money)
 
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, Response{Message: err.Error()})
@@ -184,7 +187,7 @@ func (router *RouterImpl) deposit(c echo.Context) error {
 }
 
 //GET /api/check?name="yourname"
-func (router *RouterImpl) checkBalance(c echo.Context) error {
+func (router *RouterImpl) checkBalance(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
@@ -197,14 +200,18 @@ func (router *RouterImpl) checkBalance(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, Response{Message: "user not found"})
 	}
 
-	return c.JSON(http.StatusOK, ResponseMoney{Money: fmt.Sprint(user.Money)})
+	return c.JSON(http.StatusOK, PayloadMoney{Money: user.Money})
 }
 
 // POST/api/withdraw?name="yourname"
-func (router *RouterImpl) withdraw(c echo.Context) error {
+func (router *RouterImpl) withdraw(c echo.Context) (err error) {
 	name := c.QueryParam("name")
+	payload := new(PayloadMoney)
+	if err = c.Bind(payload); err != nil {
+		return
+	}
 
-	withdraw, err := formattedMoney(c.FormValue("money"))
+	withdraw, err := formattedMoney(payload.Money)
 	withdraw *= -1
 
 	if err != nil {
@@ -225,7 +232,7 @@ func (router *RouterImpl) withdraw(c echo.Context) error {
 }
 
 // DELETE /api/user?name="yourname"
-func (router *RouterImpl) deleteUser(c echo.Context) error {
+func (router *RouterImpl) deleteUser(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
 	if verified := verifyUser(c, name); !verified {
