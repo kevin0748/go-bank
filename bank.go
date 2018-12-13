@@ -16,7 +16,7 @@ import (
 
 // AllUser ...
 type AllUser struct {
-	Users        []User `json:"users"`
+	Users        map[string]*User
 	userNameList []interface{}
 }
 
@@ -47,20 +47,16 @@ type RouterImpl struct {
 var allUser AllUser
 
 func (users *AllUser) addUser(u User) {
-	users.Users = append(users.Users, u)
+	users.Users[u.Name] = &u
 }
 
 func (users *AllUser) removeUser(name string) bool {
 
-	idx, find := users.findUserIdx(name)
-
-	if !find {
-		return false
+	if _, ok := users.Users[name]; ok {
+		delete(users.Users, name)
+		return true
 	}
-
-	allUser.Users = append(allUser.Users[:idx], allUser.Users[idx+1:]...)
-
-	return true
+	return false
 }
 
 func updateUser(name string, money int) (int, error) {
@@ -81,37 +77,17 @@ func updateUser(name string, money int) (int, error) {
 
 func (users *AllUser) findUser(name string) (*User, bool) {
 
-	// for _, user := range users.Users {
-	// 	if user.Name == name {
-	// 		return user, true
-	// 	}
-	// }
-
-	for i := 0; i < len(users.Users); i++ {
-		if users.Users[i].Name == name {
-			return &(users.Users[i]), true
-		}
+	if target, ok := users.Users[name]; ok {
+		return target, true
 	}
 
 	return &User{}, false
 
 }
 
-func (users *AllUser) findUserIdx(name string) (int, bool) {
-
-	for idx, user := range users.Users {
-		if user.Name == name {
-			return idx, true
-		}
-	}
-
-	return -1, false
-
-}
-
 func readAllUserData() {
 
-	allUser = AllUser{}
+	allUser = AllUser{Users: make(map[string]*User)}
 
 	byteValue, _ := ioutil.ReadFile("user/users.json")
 
