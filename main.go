@@ -10,13 +10,14 @@ import (
 func main() {
 	e := echo.New()
 
-	bank.ReadAllUserData()
+	bank.ReadAllUserData("user/")
 
 	e.POST("/api/user", bank.GetAccessToken)
 
 	tokenCheck := middleware.JWT([]byte("secret"))
 	var router bank.Router
-	router = &bank.RouterImpl{}
+	var routerImpl = bank.RouterImpl{VerifyUser: bank.VerifyUser}
+	router = &routerImpl
 
 	e.POST("/api/deposit", router.Deposit, tokenCheck)
 	e.POST("/api/withdraw", router.Withdraw, tokenCheck)
