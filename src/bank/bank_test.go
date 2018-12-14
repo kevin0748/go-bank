@@ -31,6 +31,10 @@ func mockUserVerify(c echo.Context, s string) bool {
 	return true
 }
 
+func mockRouter() *RouterImpl {
+	return &RouterImpl{VerifyUser: mockUserVerify}
+}
+
 func ResetAllUserData(folder string) {
 
 	writeByte := []byte(`{"name":"kevin","money":200}`)
@@ -39,19 +43,27 @@ func ResetAllUserData(folder string) {
 
 }
 
-func checkBalanceApi(t *testing.T, name string, expectAmount int) {
-
+func prepareRequest(name string, request func(q url.Values) *http.Request) (*httptest.ResponseRecorder, echo.Context) {
 	e := echo.New()
 
 	q := make(url.Values)
 	q.Set("name", name)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/withdraw?"+q.Encode(), nil)
-
+	req := request(q)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	router := &RouterImpl{VerifyUser: mockUserVerify}
+	return rec, c
+}
+
+func checkBalanceApi(t *testing.T, name string, expectAmount int) {
+
+	rec, c := prepareRequest("kevin", func(q url.Values) *http.Request {
+		return httptest.NewRequest(http.MethodGet, "/api/withdraw?"+q.Encode(), nil)
+	})
+
+	router := mockRouter()
+
 	err := router.CheckBalance(c)
 	assert.NoError(t, err)
 
@@ -59,18 +71,14 @@ func checkBalanceApi(t *testing.T, name string, expectAmount int) {
 	response := rec.Body.String()
 	assert.JSONEq(t, response, expected)
 }
+
 func TestGetAccessToken(t *testing.T) {
 
 	setupTest(t)
 
-	name := "kevin"
-
-	e := echo.New()
-	q := make(url.Values)
-	q.Set("name", name)
-	req := httptest.NewRequest(http.MethodPost, "/api/user?"+q.Encode(), nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec, c := prepareRequest("kevin", func(q url.Values) *http.Request {
+		return httptest.NewRequest(http.MethodPost, "/api/user?"+q.Encode(), nil)
+	})
 
 	err := GetAccessToken(c)
 	assert.NoError(t, err)
@@ -95,19 +103,13 @@ func TestCheckBalance(t *testing.T) {
 func TestDeposit(t *testing.T) {
 	setupTest(t)
 	name := "kevin"
-
-	e := echo.New()
-
-	q := make(url.Values)
-	q.Set("name", name)
-
 	payload := `{"money":10}`
 
-	req := httptest.NewRequest(http.MethodPost, "/api/withdraw?"+q.Encode(), strings.NewReader(payload))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec, c := prepareRequest("kevin", func(q url.Values) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/api/deposit?"+q.Encode(), strings.NewReader(payload))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		return req
+	})
 
 	router := &RouterImpl{VerifyUser: mockUserVerify}
 	err := router.Deposit(c)
@@ -118,7 +120,6 @@ func TestDeposit(t *testing.T) {
 	assert.JSONEq(t, response, expected)
 
 	checkBalanceApi(t, name, 210)
-
 }
 
 func TestWithdraw(t *testing.T) {
@@ -126,18 +127,13 @@ func TestWithdraw(t *testing.T) {
 	setupTest(t)
 	name := "kevin"
 
-	e := echo.New()
-
-	q := make(url.Values)
-	q.Set("name", name)
-
 	payload := `{"money":10}`
 
-	req := httptest.NewRequest(http.MethodPost, "/api/withdraw?"+q.Encode(), strings.NewReader(payload))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	rec, c := prepareRequest(name, func(q url.Values) *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/api/withdraw?"+q.Encode(), strings.NewReader(payload))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		return req
+	})
 
 	router := &RouterImpl{VerifyUser: mockUserVerify}
 	err := router.Withdraw(c)
@@ -148,5 +144,24 @@ func TestWithdraw(t *testing.T) {
 	assert.JSONEq(t, response, expected)
 
 	checkBalanceApi(t, name, 190)
+
+}
+
+func TestDeleteUser(t *testing.T) {
+
+	setupTest(t)
+	name := "kevin"
+
+	rec, c := prepareRequest(name, func(q url.Values) *http.Request {
+		return httptest.NewRequest(http.MethodDelete, "/api/user?"+q.Encode(), nil)
+	})
+
+	router := &RouterImpl{VerifyUser: mockUserVerify}
+	err := router.DeleteUser(c)
+	assert.NoError(t, err)
+
+	expected := `{"message": "remove success"}`
+	response := rec.Body.String()
+	assert.JSONEq(t, response, expected)
 
 }
