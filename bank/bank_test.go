@@ -20,7 +20,7 @@ type responseToken struct {
 
 func setupTest(t *testing.T) {
 
-	path := "../../user/mock_data/"
+	path := "../user/mock_data/"
 
 	ResetAllUserData(path)
 	ReadAllUserData(path)

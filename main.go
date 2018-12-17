@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bank"
+	"github.com/kevin0748/goBank/bank"
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
