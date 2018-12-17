@@ -40,6 +40,7 @@ type Router interface {
 }
 
 type RouterImpl struct {
+	VerifyUser func(echo.Context, string) bool
 }
 
 var allUser AllUser
@@ -102,17 +103,17 @@ func writeUserData(user *User) {
 
 }
 
-func ReadAllUserData() {
+func ReadAllUserData(folder string) {
 
 	allUser = AllUser{Users: make(map[string]*User)}
 
-	byteValue, _ := ioutil.ReadFile("user/users.json")
+	byteValue, _ := ioutil.ReadFile(folder + "users.json")
 
 	json.Unmarshal(byteValue, &(allUser.userNameList))
 
 	for _, userName := range allUser.userNameList {
 
-		fileName := "user/" + fmt.Sprint(userName) + ".json"
+		fileName := folder + fmt.Sprint(userName) + ".json"
 		userValue, _ := ioutil.ReadFile(fileName)
 
 		var user User
@@ -172,7 +173,7 @@ func (router *RouterImpl) Deposit(c echo.Context) (err error) {
 		return c.JSON(http.StatusBadRequest, Response{Message: err.Error()})
 	}
 
-	if verified := verifyUser(c, name); !verified {
+	if verified := router.VerifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -189,7 +190,7 @@ func (router *RouterImpl) Deposit(c echo.Context) (err error) {
 func (router *RouterImpl) CheckBalance(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
-	if verified := verifyUser(c, name); !verified {
+	if verified := router.VerifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -217,7 +218,7 @@ func (router *RouterImpl) Withdraw(c echo.Context) (err error) {
 		return c.JSON(http.StatusBadRequest, Response{Message: err.Error()})
 	}
 
-	if verified := verifyUser(c, name); !verified {
+	if verified := router.VerifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -234,7 +235,7 @@ func (router *RouterImpl) Withdraw(c echo.Context) (err error) {
 func (router *RouterImpl) DeleteUser(c echo.Context) (err error) {
 	name := c.QueryParam("name")
 
-	if verified := verifyUser(c, name); !verified {
+	if verified := router.VerifyUser(c, name); !verified {
 		return c.JSON(http.StatusUnauthorized, Response{Message: "token not allowed."})
 	}
 
@@ -245,7 +246,7 @@ func (router *RouterImpl) DeleteUser(c echo.Context) (err error) {
 
 }
 
-func verifyUser(c echo.Context, name string) bool {
+func VerifyUser(c echo.Context, name string) bool {
 	user := c.Get("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	tokenName := claims["name"].(string)
